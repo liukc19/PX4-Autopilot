@@ -61,7 +61,7 @@ px4_add_module(
 		PreFlightCheck
 		ArmAuthorization
 		HealthFlags
-		sensor_calibration
+		sensor_configuration
 		world_magnetic_model
 	)
 
