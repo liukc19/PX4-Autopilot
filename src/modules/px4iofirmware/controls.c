@@ -352,9 +352,6 @@ controls_tick()
 	 */
 	if (dsm_updated || sbus_updated || ppm_updated || st24_updated || sumd_updated) {
 
-		/* record a bitmask of channels assigned */
-		unsigned assigned_channels = 0;
-
 		/* update RC-received timestamp */
 		system_state.rc_channels_timestamp_received = hrt_absolute_time();
 
@@ -362,13 +359,7 @@ controls_tick()
 		atomic_modify_or(&r_status_flags, PX4IO_P_STATUS_FLAGS_RC_OK);
 		r_raw_rc_flags |= PX4IO_P_RAW_RC_FLAGS_RC_OK;
 
-		/* if we have enough channels (5) to control the vehicle, the mapping is ok */
-		if (assigned_channels > 4) {
-			r_raw_rc_flags |= PX4IO_P_RAW_RC_FLAGS_MAPPING_OK;
-
-		} else {
-			r_raw_rc_flags &= ~(PX4IO_P_RAW_RC_FLAGS_MAPPING_OK);
-		}
+		r_page_raw_rc_input[PX4IO_P_RAW_RC_VALID_UPDATE_COUNT]++;
 	}
 
 	/*

@@ -202,6 +202,8 @@ private:
 
 	hrt_abstime             _last_status_publish{0};
 
+	uint32_t 		_rc_valid_update_count{0};
+
 	bool			_param_update_force{true};	///< force a parameter update
 	bool			_timer_rates_configured{false};
 
@@ -1197,6 +1199,14 @@ int PX4IO::io_get_status()
 
 int PX4IO::io_publish_raw_rc()
 {
+	const uint32_t rc_valid_update_count = io_reg_get(PX4IO_PAGE_RAW_RC_INPUT, PX4IO_P_RAW_RC_VALID_UPDATE_COUNT);
+	const bool rc_updated = (rc_valid_update_count != _rc_valid_update_count + 1);
+	_rc_valid_update_count = rc_valid_update_count;
+
+	if (!rc_updated) {
+		return 0;
+	}
+
 	input_rc_s input_rc{};
 	input_rc.timestamp_last_signal = hrt_absolute_time();
 
