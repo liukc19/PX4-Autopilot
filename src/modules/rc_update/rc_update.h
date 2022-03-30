@@ -92,6 +92,8 @@ public:
 
 private:
 
+	static constexpr uint64_t VALID_DATA_MIN_INTERVAL_US{1_s / 10}; // assume valid RC input is at least 10 Hz
+
 	void Run() override;
 
 	/**
