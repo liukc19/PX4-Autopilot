@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   Copyright (c) 2012-2022 PX4 Development Team. All rights reserved.
+ *   Copyright (c) 2022 PX4 Development Team. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -31,51 +31,52 @@
  *
  ****************************************************************************/
 
-#pragma once
+/**
+ * @file ButtonPublisher.cpp
+ *
+ * Library for button functionality.
+ *
+ */
 
-#include <float.h>
-
-#include <drivers/drv_hrt.h>
-#include <px4_platform_common/module.h>
-#include <px4_platform_common/px4_work_queue/ScheduledWorkItem.hpp>
 #include <button/ButtonPublisher.hpp>
 
-class SafetyButton : public ModuleBase<SafetyButton>, public px4::ScheduledWorkItem
+using namespace time_literals;
+
+void ButtonPublisher::safetyButtonTriggerEvent(uint8_t source)
 {
-public:
-	SafetyButton();
-	~SafetyButton() override;
+	_safety_button.source = source;
+	_safety_button.triggered = true;
+	_safety_button.timestamp = hrt_absolute_time();
 
-	/** @see ModuleBase */
-	static int task_spawn(int argc, char *argv[]);
+	_safety_button_pub.publish(_safety_button);
+}
 
-	/** @see ModuleBase */
-	static int custom_command(int argc, char *argv[]);
+void ButtonPublisher::pairingButtonTriggerEvent()
+{
+	vehicle_command_s vcmd{};
+	vcmd.command = vehicle_command_s::VEHICLE_CMD_START_RX_PAIR;
+	vcmd.param1 = 10.f; // GCS pairing request handled by a companion.
+	vcmd.timestamp = hrt_absolute_time();
+	_vehicle_command_pub.publish(vcmd);
+	PX4_DEBUG("Sending GCS pairing request");
 
-	/** @see ModuleBase */
-	static int print_usage(const char *reason = nullptr);
+	led_control_s led_control{};
+	led_control.led_mask = 0xff;
+	led_control.mode = led_control_s::MODE_BLINK_FAST;
+	led_control.color = led_control_s::COLOR_GREEN;
+	led_control.num_blinks = 1;
+	led_control.priority = 0;
+	led_control.timestamp = hrt_absolute_time();
+	led_control_pub.publish(led_control);
 
-	/** @see ModuleBase::print_status() */
-	int print_status() override;
+	tune_control_s tune_control{};
+	tune_control.tune_id = tune_control_s::TUNE_ID_NOTIFY_POSITIVE;
+	tune_control.volume = tune_control_s::VOLUME_LEVEL_DEFAULT;
+	tune_control.timestamp = hrt_absolute_time();
+	_tune_control_pub.publish(tune_control);
+}
 
-	int Start();
-
-private:
-	void Run() override;
-
-	void CheckSafetyRequest(bool button_pressed);
-	void CheckPairingRequest(bool button_pressed);
-	void FlashButton();
-
-	ButtonPublisher	_button_publisher;
-	uint8_t			_button_counter{0};
-	uint8_t			_blink_counter{0};
-	bool			_button_prev_sate{false};	///< Previous state of the HW button
-
-	// Pairing request
-	hrt_abstime		_pairing_start{0};
-	int				_pairing_button_counter{0};
-
-	uORB::Subscription	_armed_sub{ORB_ID(actuator_armed)};
-
-};
+void ButtonPublisher::printStatus()
+{
+	PX4_INFO("Safety button triggered : %s", _safety_button.triggered ? "yes" : "no");
+}
