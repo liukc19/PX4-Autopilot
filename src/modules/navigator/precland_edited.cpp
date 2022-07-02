@@ -57,7 +57,8 @@
 
 #define SEC2USEC 1000000.0f
 
-#define STATE_TIMEOUT 1000000000 // [us] Maximum time to spend in any state
+// 每个状态的停留有时间限制
+#define STATE_TIMEOUT 10000000 // [us] Maximum time to spend in any state
 
 PrecLand::PrecLand(Navigator *navigator) :
 	MissionBlock(navigator),
@@ -72,6 +73,7 @@ PrecLand::PrecLand(Navigator *navigator) :
 void
 PrecLand::on_activation()
 {
+	// 初始化当前状态为Start并且初始化计数器、时间等参数
 	_state = PrecLandState::Start;
 	_search_cnt = 0;
 	_last_slewrate_time = 0;
@@ -86,6 +88,7 @@ PrecLand::on_activation()
 
 	pos_sp_triplet->next.valid = false;
 	pos_sp_triplet->previous.valid = false;
+
 
 	// Check that the current position setpoint is valid, otherwise land at current position
 	if (!pos_sp_triplet->current.valid) {
@@ -106,6 +109,7 @@ PrecLand::on_activation()
 	_is_activated = true;
 }
 
+// 状态机控制
 void
 PrecLand::on_active()
 {
@@ -120,6 +124,7 @@ PrecLand::on_active()
 		_target_pose_valid = false;
 	}
 
+	// 着落则停止
 	// stop if we are landed
 	if (_navigator->get_land_detected()->landed) {
 		switch_to_state_done();
@@ -135,11 +140,11 @@ PrecLand::on_active()
 		break;
 
 	case PrecLandState::DescendAboveTarget:
-		//run_state_descend_above_target();
+		run_state_descend_above_target();
 		break;
 
 	case PrecLandState::FinalApproach:
-		//run_state_final_approach();
+		run_state_final_approach();
 		break;
 
 	case PrecLandState::Search:
@@ -147,7 +152,7 @@ PrecLand::on_active()
 		break;
 
 	case PrecLandState::Fallback:
-		//run_state_fallback();
+		run_state_fallback();
 		break;
 
 	case PrecLandState::Done:
@@ -184,18 +189,23 @@ PrecLand::updateParams()
 void
 PrecLand::run_state_start()
 {
+	// 如果目标可见切换为HorizontalApproach状态
 	// check if target visible and go to horizontal approach
 	if (switch_to_state_horizontal_approach()) {
 		return;
 	}
 
+	// 如果目标不可见：
+
 	if (_mode == PrecLandMode::Opportunistic) {
+		// 如果是在Opportunistic模式，看不见目标只能切换到状态Fallback应急着陆
 		// could not see the target immediately, so just fall back to normal landing
 		if (!switch_to_state_fallback()) {
 			PX4_ERR("Can't switch to search or fallback landing");
 		}
 	}
 
+	// 如果处于Required模式，则尝试寻找目标
 	position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 	float dist = get_distance_to_next_waypoint(pos_sp_triplet->current.lat, pos_sp_triplet->current.lon,
 			_navigator->get_global_position()->lat, _navigator->get_global_position()->lon);
@@ -230,6 +240,7 @@ PrecLand::run_state_horizontal_approach()
 {
 	position_setpoint_triplet_s *pos_sp_triplet = _navigator->get_position_setpoint_triplet();
 
+	// 目标不可见则切换为start状态
 	// check if target visible, if not go to start
 	if (!check_state_conditions(PrecLandState::HorizontalApproach)) {
 		PX4_WARN("Lost landing target while landing (horizontal approach).");
@@ -248,6 +259,7 @@ PrecLand::run_state_horizontal_approach()
 		return;
 	}
 
+	// 准备切换到DescendAboveTarget即在目标上方着陆
 	if (check_state_conditions(PrecLandState::DescendAboveTarget)) {
 		if (!_point_reached_time) {
 			_point_reached_time = hrt_absolute_time();
@@ -272,7 +284,6 @@ PrecLand::run_state_horizontal_approach()
 		PX4_ERR("Can't switch to fallback landing");
 	}
 
-	_target_pose_sub.update(&_target_pose);
 	float x = _target_pose.x_abs;
 	float y = _target_pose.y_abs;
 
@@ -323,10 +334,7 @@ PrecLand::run_state_descend_above_target()
 void
 PrecLand::run_state_final_approach()
 {
-	static int count = 0;
-	count++;
 	// nothing to do, will land
-	PX4_INFO("Final Approach!:%d", count);
 }
 
 void

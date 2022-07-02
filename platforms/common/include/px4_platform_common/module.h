@@ -56,7 +56,13 @@
  *        There could be one mutex per module instantiation, but to reduce the memory footprint
  *        there is only a single global mutex. This sounds bad, but we actually don't expect
  *        contention here, as module startup is sequential.
+ * google翻译如下：
+ *	此互斥锁可防止模块启动和关闭期间的竞争条件。
+ * 	每个模块实例化可能有一个互斥锁，但为了减少内存占用，只有一个全局互斥锁。
+ * 	这听起来很糟糕，但我们实际上并不期望这里发生争用，因为模块启动是顺序的。
+ * 线程以及互斥锁可以参考 https://blog.csdn.net/qq_39736982/article/details/82348672
  */
+// 全局互斥锁
 extern pthread_mutex_t px4_modules_mutex;
 
 /**
@@ -66,12 +72,20 @@ extern pthread_mutex_t px4_modules_mutex;
  *      Currently does not support modules which allow multiple instances,
  *      such as mavlink.
  *
+ *google 翻译：
+ *	模块的基类，实现通用功能，例如'start'，'stop'和'status'命令。目前不支持允许多个实例的模块，例如mavlink。
+ *
  *      The class is implemented as curiously recurring template pattern (CRTP).
  *      It allows to have a static object in the base class that is different for
  *      each module type, and call static methods from the base class.
  *
+ * google 翻译：
+ *	该类被实现为奇怪的重复模板模式（CRTP）。它允许在基类中拥有一个对每个模块类型都不同的静态对象，并从基类调用静态方法。
+ *
  * @note Required methods for a derived class:
  * When running in its own thread:
+ * 	https://docs.px4.io/master/en/modules/module_template.html 的教程中也有提到初始化 task_spawn 方法
+ * 	初始化一个任务
  *      static int task_spawn(int argc, char *argv[])
  *      {
  *              // call px4_task_spawn_cmd() with &run_trampoline as startup method
@@ -79,7 +93,7 @@ extern pthread_mutex_t px4_modules_mutex;
  *              // set _task_id and return 0
  *              // on error return != 0 (and _task_id must be -1)
  *      }
- *
+ *	更加复杂的初始化操作，返回指针
  *      static T *instantiate(int argc, char *argv[])
  *      {
  *              // this is called from within the new thread, from run_trampoline()
@@ -87,19 +101,19 @@ extern pthread_mutex_t px4_modules_mutex;
  *              // create a new object T & return it
  *              // or return nullptr on error
  *      }
- *
+ *	对命令行命令进行解释  如 make -j
  *      static int custom_command(int argc, char *argv[])
  *      {
  *              // support for custom commands
  *              // it none are supported, just do:
  *              return print_usage("unrecognized command");
  *      }
- *
+ *	打印帮助信息
  *      static int print_usage(const char *reason = nullptr)
  *      {
  *              // use the PRINT_MODULE_* methods...
  *      }
- *
+ *	初始化一个队列任务，可以参考 PX4 USER GUIDE，类似于RTOS（PSOC）
  * When running on the work queue:
  * - custom_command & print_usage as above
  *      static int task_spawn(int argc, char *argv[]) {
@@ -117,13 +131,13 @@ class ModuleBase
 public:
 	ModuleBase() : _task_should_exit{false} {}
 	virtual ~ModuleBase() {}
-
+	//模块入口函数
 	/**
 	 * @brief main Main entry point to the module that should be
 	 *        called directly from the module's main method.
-	 * @param argc The task argument count.
-	 * @param argc Pointer to the task argument variable array.
-	 * @return Returns 0 iff successful, -1 otherwise.
+	 * @param argc The task argument count.				输入参数个数
+	 * @param argv Pointer to the task argument variable array.	输入参数的指针数组
+	 * @return Returns 0 if successful, -1 otherwise. 		成功返回0，失败返回-1
 	 */
 	static int main(int argc, char *argv[])
 	{
@@ -134,22 +148,23 @@ public:
 		    strcmp(argv[1], "usage") == 0) {
 			return T::print_usage();
 		}
-
+		//输入参数过少，调用函数，打印帮助信息
 		if (strcmp(argv[1], "start") == 0) {
 			// Pass the 'start' argument too, because later on px4_getopt() will ignore the first argument.
 			return start_command_base(argc - 1, argv + 1);
 		}
-
+		//启动模块，并传递后续参数
 		if (strcmp(argv[1], "status") == 0) {
 			return status_command();
 		}
-
+		//调用函数，显示状态信息
 		if (strcmp(argv[1], "stop") == 0) {
 			return stop_command();
 		}
-
+		//停止模块
+		//获取锁？
 		lock_module(); // Lock here, as the method could access _object.
-		int ret = T::custom_command(argc - 1, argv + 1);
+		int ret = T::custom_command(argc - 1, argv + 1); //处理其他参数
 		unlock_module();
 
 		return ret;
@@ -157,13 +172,15 @@ public:
 
 	/**
 	 * @brief Entry point for px4_task_spawn_cmd() if the module runs in its own thread.
+	 * 	如果模块在自己的线程中运行，则为 px4_task_spawn_cmd() 的入口点。
 	 *        It does:
 	 *        - instantiate the object
 	 *        - call run() on it to execute the main loop
 	 *        - cleanup: delete the object
+	 *	1.实例化对象 2.调用 run() 函数以在当前线程上执行主循环 3.删除对象，回收计算资源
 	 * @param argc The task argument count.
-	 * @param argc Pointer to the task argument variable array.
-	 * @return Returns 0 iff successful, -1 otherwise.
+	 * @param argv Pointer to the task argument variable array.
+	 * @return Returns 0 if successful, -1 otherwise.
 	 */
 	static int run_trampoline(int argc, char *argv[])
 	{
@@ -174,28 +191,31 @@ public:
 		argv += 1;
 
 		T *object = T::instantiate(argc, argv);
+		//实例化模块，得到句柄/指针
 		_object.store(object);
-
+		//拷贝副本（深层） ？
 		if (object) {
 			object->run();
-
+			//实例化成功，则从模块的 run 开始执行
 		} else {
 			PX4_ERR("failed to instantiate object");
 			ret = -1;
+			//实例化失败
 		}
 
-		exit_and_cleanup();
+		exit_and_cleanup();//退出线程，回收资源
 
 		return ret;
 	}
 
 	/**
-	 * @brief Stars the command, ('command start'), checks if if is already
+	 * @brief Starts the command, ('command start'), checks if it is already
 	 *        running and calls T::task_spawn() if it's not.
 	 * @param argc The task argument count.
-	 * @param argc Pointer to the task argument variable array.
-	 * @return Returns 0 iff successful, -1 otherwise.
+	 * @param argv Pointer to the task argument variable array.
+	 * @return Returns 0 if successful, -1 otherwise.
 	 */
+	//启动模块
 	static int start_command_base(int argc, char *argv[])
 	{
 		int ret = 0;
@@ -220,8 +240,9 @@ public:
 	/**
 	 * @brief Stops the command, ('command stop'), checks if it is running and if it is, request the module to stop
 	 *        and waits for the task to complete.
-	 * @return Returns 0 iff successful, -1 otherwise.
+	 * @return Returns 0 if successful, -1 otherwise.
 	 */
+	//停止模块
 	static int stop_command()
 	{
 		int ret = 0;
@@ -229,7 +250,7 @@ public:
 
 		if (is_running()) {
 			T *object = _object.load();
-
+			//导入副本
 			if (object) {
 				object->request_stop();
 
@@ -237,10 +258,11 @@ public:
 
 				do {
 					unlock_module();
-					px4_usleep(10000); // 10 ms
+					px4_usleep(10000); // 等 10 ms
 					lock_module();
 
 					if (++i > 500 && _task_id != -1) { // wait at most 5 sec
+					//强制停止
 						PX4_ERR("timeout, forcing stop");
 
 						if (_task_id != task_id_is_work_queue) {
@@ -272,7 +294,7 @@ public:
 
 	/**
 	 * @brief Handle 'command status': check if running and call print_status() if it is
-	 * @return Returns 0 iff successful, -1 otherwise.
+	 * @return Returns 0 if successful, -1 otherwise.
 	 */
 	static int status_command()
 	{
@@ -294,8 +316,9 @@ public:
 	/**
 	 * @brief Print the status if the module is running. This can be overridden by the module to provide
 	 * more specific information.
-	 * @return Returns 0 iff successful, -1 otherwise.
+	 * @return Returns 0 if successful, -1 otherwise.
 	 */
+	// 打印状态信息，可被子类重写
 	virtual int print_status()
 	{
 		PX4_INFO("running");
@@ -306,6 +329,7 @@ public:
 	 * @brief Main loop method for modules running in their own thread. Called from run_trampoline().
 	 *        This method must return when should_exit() returns true.
 	 */
+	//线程任务的主循环
 	virtual void run()
 	{
 	}
@@ -331,7 +355,7 @@ protected:
 
 	/**
 	 * @brief Checks if the module should stop (used within the module thread).
-	 * @return Returns True iff successful, false otherwise.
+	 * @return Returns True if successful, false otherwise.
 	 */
 	bool should_exit() const
 	{
@@ -345,12 +369,13 @@ protected:
 	 */
 	static void exit_and_cleanup()
 	{
+		// 看不懂
 		// Take the lock here:
 		// - if startup fails and we're faster than the parent thread, it will set
 		//   _task_id and subsequently it will look like the task is running.
 		// - deleting the object must take place inside the lock.
 		lock_module();
-
+		//删除模块
 		delete _object.load();
 		_object.store(nullptr);
 
@@ -362,6 +387,7 @@ protected:
 	 * @brief Waits until _object is initialized, (from the new thread). This can be called from task_spawn().
 	 * @return Returns 0 iff successful, -1 on timeout or otherwise.
 	 */
+	//等待线程初始化（阻塞）
 	static int wait_until_running(int timeout_ms = 1000)
 	{
 		int i = 0;
@@ -391,6 +417,7 @@ protected:
 	 * @var _object Instance if the module is running.
 	 * @note There will be one instance for each template type.
 	 */
+	//模块的句柄，对每一模块唯一。当模块未处于运行状态时其为空。
 	static px4::atomic<T *> _object;
 
 	/** @var _task_id The task handle: -1 = invalid, otherwise task is assumed to be running. */
@@ -403,11 +430,12 @@ private:
 	/**
 	 * @brief lock_module Mutex to lock the module thread.
 	 */
+	// 获取锁
 	static void lock_module()
 	{
 		pthread_mutex_lock(&px4_modules_mutex);
 	}
-
+	//释放锁
 	/**
 	 * @brief unlock_module Mutex to unlock the module thread.
 	 */
@@ -417,6 +445,7 @@ private:
 	}
 
 	/** @var _task_should_exit Boolean flag to indicate if the task should exit. */
+	// 表示当前任务是否要退出/结束
 	px4::atomic_bool _task_should_exit{false};
 };
 

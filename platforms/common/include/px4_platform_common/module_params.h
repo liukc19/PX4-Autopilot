@@ -36,6 +36,7 @@
  *
  * @class ModuleParams is a C++ base class for modules/classes using configuration parameters.
  */
+// 将模块参数组织成链表，每个 模块参数模块 含有父节点指针和和由所有子孙节点组成的链表指针
 
 #pragma once
 
@@ -69,7 +70,7 @@ public:
 	{
 		if (_parent) { _parent->_children.remove(this); }
 	}
-
+	// 不允许复制构造和赋值操作
 	// Disallow copy construction and move assignment.
 	ModuleParams(const ModuleParams &) = delete;
 	ModuleParams &operator=(const ModuleParams &) = delete;

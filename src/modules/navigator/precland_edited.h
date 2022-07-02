@@ -34,6 +34,7 @@
  * @file precland.h
  *
  * Helper class to do precision landing with a landing target
+ * 精确着陆到目标的工具类
  *
  * @author Nicolas de Palezieux (Sunflower Labs) <ndepal@gmail.com>
  */
@@ -50,41 +51,53 @@
 #include "mission_block.h"
 
 enum class PrecLandState {
-	Start, // Starting state
-	HorizontalApproach, // Positioning over landing target while maintaining altitude
-	DescendAboveTarget, // Stay over landing target while descending
-	FinalApproach, // Final landing approach, even without landing target
-	Search, // Search for landing target
-	Fallback, // Fallback landing method
-	Done // Done landing
+	Start, // Starting state 开始状态
+	HorizontalApproach, // Positioning over landing target while maintaining altitude 目标上方保持高度接近目标物体
+	DescendAboveTarget, // Stay over landing target while descending 在目标上方下降
+	FinalApproach, // Final landing approach, even without landing target 最终着陆，即使没有目标
+	Search, // Search for landing target 寻找着陆目标
+	Fallback, // Fallback landing method 应急着陆
+	Done // Done landing 完成着陆
 };
 
 enum class PrecLandMode {
 	Opportunistic = 1, // only do precision landing if landing target visible at the beginning
+	// 模式1：着陆目标在开始就可见时，才能着陆
 	Required = 2 // try to find landing target if not visible at the beginning
+	// 模式2：着陆目标不可见则尝试寻找目标
 };
 
 class PrecLand : public MissionBlock, public ModuleParams
+// 继承MissionBlock类和ModuleParams类
 {
 public:
 	PrecLand(Navigator *navigator);
 	~PrecLand() override = default;
 
+	// 继承自MissionBlock的父类 NavigatorModer 的虚函数
+	// 开始激活时调用，pos_sp_triplet必须在这里初始化
 	void on_activation() override;
+	// 处于活动状态时调用，状态机的切换
 	void on_active() override;
+	// 处于非活动状态时调用，
 	void on_inactivation() override;
 
+	// 设定模式
 	void set_mode(PrecLandMode mode) { _mode = mode; };
 
+	// 获得当前模式
 	PrecLandMode get_mode() { return _mode; };
 
+	// 是否激活
 	bool is_activated() { return _is_activated; };
 
 private:
 
+	// 继承自ModuleParams类
 	void updateParams() override;
 
 	// run the control loop for each state
+	// 每个状态的运行方法
 	void run_state_start();
 	void run_state_horizontal_approach();
 	void run_state_descend_above_target();
@@ -93,6 +106,7 @@ private:
 	void run_state_fallback();
 
 	// attempt to switch to a different state. Returns true if state change was successful, false otherwise
+	// 切换状态函数，不成功返回false
 	bool switch_to_state_start();
 	bool switch_to_state_horizontal_approach();
 	bool switch_to_state_descend_above_target();
@@ -102,24 +116,28 @@ private:
 	bool switch_to_state_done();
 
 	// check if a given state could be changed into. Return true if possible to transition to state, false otherwise
+	// 检查状态是否能被切换
 	bool check_state_conditions(PrecLandState state);
 	void slewrate(float &sp_x, float &sp_y);
 
+	// 目标位置
 	landing_target_pose_s _target_pose{}; /**< precision landing target position */
-	// 尝试操作该变量
 
 	uORB::Subscription _target_pose_sub{ORB_ID(landing_target_pose)};
-	// WARN
+	// 是否收到位置信息
 	bool _target_pose_valid{false}; /**< whether we have received a landing target position message */
+	// 位置信息是否更新
 	bool _target_pose_updated{false}; /**< wether the landing target position message is updated */
 
 	MapProjection _map_ref{}; /**< class for local/global projections */
 
+	// 各节点的时间
 	uint64_t _state_start_time{0}; /**< time when we entered current state */
 	uint64_t _last_slewrate_time{0}; /**< time when we last limited setpoint changes */
 	uint64_t _target_acquired_time{0}; /**< time when we first saw the landing target during search */
 	uint64_t _point_reached_time{0}; /**< time when we reached a setpoint */
 
+	// 搜索计数器
 	int _search_cnt{0}; /**< counter of how many times we had to search for the landing target */
 	float _approach_alt{0.0f}; /**< altitude at which to stay during horizontal approach */
 

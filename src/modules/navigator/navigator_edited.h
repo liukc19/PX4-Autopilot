@@ -93,62 +93,72 @@ class Navigator : public ModuleBase<Navigator>, public ModuleParams
 public:
 	Navigator();
 	~Navigator() override;
-	//禁止拷贝构造
+
 	Navigator(const Navigator &) = delete;
-	//禁止赋值操作
 	Navigator operator=(const Navigator &) = delete;
 
 	/** @see ModuleBase */
+	// 任务启动，获取某任务的taskid
 	static int task_spawn(int argc, char *argv[]);
 
 	/** @see ModuleBase */
+	// 任务实例化，创建一个Navigator类（默认参数）并返回
 	static Navigator *instantiate(int argc, char *argv[]);
 
 	/** @see ModuleBase */
+	// 自定义命令（fencefile或fake_traffic两条）
 	static int custom_command(int argc, char *argv[]);
 
 	/** @see ModuleBase */
+	// 输出使用方法
 	static int print_usage(const char *reason = nullptr);
 
 	/** @see ModuleBase::run() */
 	void run() override;
 
 	/** @see ModuleBase::print_status() */
+	// 打印状态，调用_geofence.printStatus()
 	int print_status() override;
 
 	/**
 	 * Load fence from file
+	 * 从文件（SD卡）加载fence，调用_geofence.loadFromFile(filename)
 	 */
 	void load_fence_from_file(const char *filename);
 
+	// 发布命令vcmd
 	void publish_vehicle_cmd(vehicle_command_s *vcmd);
 
 	/**
 	 * Generate an artificial traffic indication
+	 * 生成人工交通指示
 	 *
-	 * @param distance Horizontal distance to this vehicle
-	 * @param direction Direction in earth frame from this vehicle in radians
-	 * @param traffic_heading Travel direction of the traffic in earth frame in radians
-	 * @param altitude_diff Altitude difference, positive is up
-	 * @param hor_velocity Horizontal velocity of traffic, in m/s
-	 * @param ver_velocity Vertical velocity of traffic, in m/s
-	 * @param emitter_type, Type of vehicle, as a number
+	 * @param distance Horizontal distance to this vehicle （到vehicle的水平距离）
+	 * @param direction Direction in earth frame from this vehicle in radians（车辆在地球框架中的方向）
+	 * @param traffic_heading Travel direction of the traffic in earth frame in radians（地球框架内交通的行进方向？）
+	 * @param altitude_diff Altitude difference, positive is up（高度差，向上为正）
+	 * @param hor_velocity Horizontal velocity of traffic, in m/s（水平速度）
+	 * @param ver_velocity Vertical velocity of traffic, in m/s（垂直速度）
+	 * @param emitter_type, Type of vehicle, as a number （vehicle类型）
 	 */
 	void fake_traffic(const char *callsign, float distance, float direction, float traffic_heading, float altitude_diff,
 			  float hor_velocity, float ver_velocity, int emitter_type);
 
 	/**
 	 * Check nearby traffic for potential collisions
+	 * 翻译： 检查附近的交通是否存在潜在的碰撞
 	 */
 	void check_traffic();
 
 	/**
 	 * Buffer for air traffic to control the amount of messages sent to a user
+	 * 翻译： 空中交通的缓冲区，用于控制发送给用户的消息量
 	 */
 	bool buffer_air_traffic(uint32_t icao_address);
 
 	/**
 	 * Setters
+	 * 设置参数，参数含义见private中其声明
 	 */
 	void set_can_loiter_at_sp(bool can_loiter) { _can_loiter_at_sp = can_loiter; }
 	void set_position_setpoint_triplet_updated() { _pos_sp_triplet_updated = true; }
@@ -156,6 +166,7 @@ public:
 
 	/**
 	 * Getters
+	 * 获取参数，参数含义见private中其声明
 	 */
 	home_position_s             *get_home_position() { return &_home_pos; }
 	mission_result_s            *get_mission_result() { return &_mission_result; }
@@ -185,50 +196,64 @@ public:
 
 	/**
 	 * Returns the default acceptance radius defined by the parameter
+	 * 返回由参数（_param_nav_acc_rad）定义的、允许起飞的半径
 	 */
 	float get_default_acceptance_radius();
 
 	/**
 	 * Get the acceptance radius
+	 * 获取接受半径，和get_default_acceptance_radius应该是相似作用
+	 * 除了固定翼和漫游者（fixed-wing and rover），返回值与get_default_acceptance_radius相同
 	 *
 	 * @return the distance at which the next waypoint should be used
+	 * 返回距离，在此距离下，新的航点应该被使用
 	 */
 	float get_acceptance_radius();
 
 	/**
 	 * Get the default altitude acceptance radius (i.e. from parameters)
+	 * 获取默认高度接受半径
 	 *
 	 * @return the distance from the target altitude before considering the waypoint reached
+	 *  在考虑到达的航点之前，距离目标高度的距离；我理解为该高度的参照物为下一个航点
 	 */
 	float get_default_altitude_acceptance_radius();
 
 	/**
 	 * Get the altitude acceptance radius
+	 * 获取高度接受半径
 	 *
 	 * @return the distance from the target altitude before considering the waypoint reached
+	 * 在考虑到达的航点之前，距离目标高度的距离；我理解为该高度的参照物为下一个航点
 	 */
 	float get_altitude_acceptance_radius();
 
 	/**
 	 * Get the cruising speed
+	 * 获取巡航速度
 	 *
 	 * @return the desired cruising speed for this mission
+	 * 返回该任务所需的巡航速度
 	 */
 	float get_cruising_speed();
 
 	/**
 	 * Set the cruising speed
+	 * 设置巡航速度
 	 *
 	 * Passing a negative value or leaving the parameter away will reset the cruising speed
 	 * to its default value.
+	 *  传递负值或不使用该参数会将巡航速度重置为其默认值。
 	 *
 	 * For VTOL: sets cruising speed for current mode only (multirotor or fixed-wing).
+	 * 对于VTOL（垂直起降），仅为当前模式设置巡航速度（多旋翼或固定翼）
 	 *
 	 */
 	void set_cruising_speed(float speed = -1.0f);
 
 	/**
 	 * Reset cruising speed to default values
+	 * 重置巡航速度
 	 *
 	 * For VTOL: resets both cruising speeds.
 	 */
@@ -236,16 +261,19 @@ public:
 
 	/**
 	 *  Set triplets to invalid
+	 *  重置triplet（保存有previous、current、next三个航点的三元组）
 	 */
 	void reset_triplets();
 
 	/**
 	 *  Set position setpoint to safe defaults
+	 *  重置航点，设置为安全值
 	 */
 	void reset_position_setpoint(position_setpoint_s &sp);
 
 	/**
 	 * Get the target throttle
+	 * 获取目标推力
 	 *
 	 * @return the desired throttle for this mission
 	 */
@@ -253,16 +281,20 @@ public:
 
 	/**
 	 * Set the target throttle
+	 * 设置目标推力_mission_throttle
 	 */
 	void set_cruising_throttle(float throttle = NAN) { _mission_throttle = throttle; }
 
 	/**
 	 * Get the yaw acceptance given the current mission item
+	 * 根据当前任务获取偏航的可接受值
 	 *
 	 * @param mission_item_yaw the yaw to use in case the controller-derived radius is finite
+	 * 输入参数：控制器导出的半径有限时使用的偏航
 	 *
 	 * @return the yaw at which the next waypoint should be used or NaN if the yaw at a waypoint
 	 * should be ignored
+	 * 返回值：下一个航点应该使用的偏航值
 	 */
 	float get_yaw_acceptance(float mission_item_yaw);
 
@@ -316,11 +348,15 @@ public:
 	float get_vtol_back_trans_deceleration() const { return _param_back_trans_dec_mss; }
 	float get_vtol_reverse_delay() const { return _param_reverse_delay; }
 
+	// 强制垂直着陆
 	bool force_vtol();
 
+	// 获取云台控制
 	void acquire_gimbal_control();
+	// 释放（结束）云台控制
 	void release_gimbal_control();
 
+	// 根据当前局部位置和全局位置，计算航点的经纬度和偏航
 	void calculate_breaking_stop(double &lat, double &lon, float &yaw);
 
 private:

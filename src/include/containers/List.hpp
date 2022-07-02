@@ -36,7 +36,7 @@
  *
  * An intrusive linked list.
  */
-
+// 侵入式链表？ 单向链表加迭代器
 #pragma once
 
 #include <stdlib.h>
